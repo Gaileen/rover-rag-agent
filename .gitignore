@@ -1,0 +1,11 @@
+.venv/
+
+.env
+
+crawl4ai-examples/
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.DS_Store
