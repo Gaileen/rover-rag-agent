@@ -13,8 +13,10 @@ from crawl4ai import (
 )
 
 async def crawl_recursive_batch(start_urls, max_depth=3, max_concurrent=10):
+    # Set up browser config--controls browser behavior.
     browser_config = BrowserConfig(headless=True, verbose=False)
-    run_config = CrawlerRunConfig(
+    # Set up crawler config--controls how each crawl runs.
+    crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         stream=False
     )
@@ -43,7 +45,7 @@ async def crawl_recursive_batch(start_urls, max_depth=3, max_concurrent=10):
             # Batch-crawl all URLs at this depth in parallel
             results = await crawler.arun_many(
                 urls=urls_to_crawl,
-                config=run_config,
+                config=crawler_config,
                 dispatcher=dispatcher
             )
 

@@ -23,43 +23,30 @@ openai_client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 #     os.getenv("SUPABASE_SERVICE_KEY")
 # )
 
-async def crawl_parallel(urls: List[str], max_concurrent: int = 5):
-    """Crawl multiple URLs in parallel with a concurrency limit."""
-    browser_config = BrowserConfig(
-        headless=True,
-        verbose=False,
-        extra_args=["--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox"],
-    )
-    crawl_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS)
 
-    # Create the crawler instance
-    crawler = AsyncWebCrawler(config=browser_config)
-    await crawler.start()
+# 1. Build an array of URLs of relevant sitters we need to crawl.
+# 2. Crawl these URLs in parallel:
+    # a. Process text into chunks (use additional LLM agents if needed).
+    # b. Store into supabase.
+# 3. [create the RAG agent]
 
-    try:
-        # Create a semaphore to limit concurrency
-        semaphore = asyncio.Semaphore(max_concurrent)
-        
-        async def process_url(url: str):
-            async with semaphore:
-                result = await crawler.arun(
-                    url=url,
-                    config=crawl_config,
-                    session_id="session1"
-                )
-                if result.success:
-                    print(f"Successfully crawled: {url}")
-                    await process_and_store_document(url, result.markdown_v2.raw_markdown)
-                else:
-                    print(f"Failed: {url} - Error: {result.error_message}")
-        
-        # Process all URLs in parallel with limited concurrency
-        await asyncio.gather(*[process_url(url) for url in urls])
-    finally:
-        await crawler.close()
 
-def get_pydantic_ai_docs_urls() -> List[str]:
-    """Get URLs from Pydantic AI docs sitemap."""
+# 1a.
+async def crawl_recursive_batch(start_urls, max_depth=3, max_concurrent=10):
+    
+
+# 1.
+def get_urls() -> List[str]:
+    # TODO: set up required search variables to filter on (for testing)
+    test_in_pet = "dog"
+    test_in_petamt = "1"
+    test_in_startdate = ""
+    test_in_enddate = ""
+    test_in_locatiom = "Milford, CT"
+    test_in_other_optional = []
+
+
+    """Get sitter URLs from Rover based on user input."""
     sitemap_url = "https://ai.pydantic.dev/sitemap.xml"
     try:
         response = requests.get(sitemap_url)
@@ -77,9 +64,14 @@ def get_pydantic_ai_docs_urls() -> List[str]:
         print(f"Error fetching sitemap: {e}")
         return []
 
+# 2.
+async def crawl_parallel(urls: List[str], max_concurrent: int = 5):
+    """Crawl multiple URLs in parallel with a concurrency limit."""
+    
+
 async def main():
-    # Get URLs from Pydantic AI docs
-    urls = get_pydantic_ai_docs_urls()
+    # Get relevant sitter URLs from Rover
+    urls = get_urls()
     if not urls:
         print("No URLs found to crawl")
         return
