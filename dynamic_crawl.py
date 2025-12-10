@@ -1,71 +1,96 @@
-"""
-5-crawl_recursive_internal_links.py
-----------------------------------
-Recursively crawls a site starting from a root URL, using Crawl4AI's arun_many and a memory-adaptive dispatcher.
-At each depth, all internal links are discovered and crawled in parallel, up to a specified depth, with deduplication.
-Usage: Set the start URL and max_depth in main(), then run as a script.
-"""
 import asyncio
-from urllib.parse import urldefrag
-from crawl4ai import (
-    AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode,
-    MemoryAdaptiveDispatcher
-)
+import json
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+from crawl4ai import JsonCssExtractionStrategy
 
-async def crawl_recursive_batch(start_urls, max_depth=3, max_concurrent=10):
+async def extract_structured_data_using_css_extractor():
+    
+    # define the CSS schema needed for crawler to get the sitter URLs to collect
+    results_card_schema = {
+        "name": "Rover Search Results",
+        "baseSelector": "div[data-testid='search-result-card']",
+        "fields": [
+            {
+                "name": "sitter_name",
+                "selector": "span[itemprop='name']",
+                "type": "text",
+            },
+            {
+                "name": "sitter_url",
+                # "selector": "a .SearchResultCard__MemberProfileAnchor-sc-doe1cb-0",
+                "selector": "> a",
+                "type": "attribute",
+                "attribute": "href"
+            },
+        ],
+    }
+
     # Set up browser config--controls browser behavior.
-    browser_config = BrowserConfig(headless=True, verbose=False)
+    browser_config = BrowserConfig(
+        headless=False,             # show UI
+        java_script_enabled=True   # enable js to execute on the page (js-rendering, etc.)
+    )
+
+    ### test js function vars
+    js_hit_search = """
+    (() => {
+        const search_btn = document.querySelector('button[data-testid="search-box-submit"]');
+        if (search_btn) {
+            search_btn.click();
+            console.log("SEARCH button clicked successfully");
+        } else {
+            console.warn("SEARCH button not found");
+        }
+    })();
+    """
+    js_close_modal = """
+    (() => {
+        const modal_btn = document.querySelector('button[aria-label="Dismiss modal"]');
+        if (modal_btn) {
+            modal_btn.click();
+            console.log("MODAL close button clicked successfully");
+        } else {
+            console.warn("MODAL close button not found");
+        }
+    })();
+    """
+    ### test js function vars end
+
+    # 1) js function that enters user input () into the search box
+    js_enter_search = """
+    
+    """
+
+    # 2) js function that inputs # of dogs/puppies/cats, -> hit 'Next' btn, ->
+    # hit 'Search Now' btn; all in the modal pop-up that occurs on browser.
+    js_modal = """
+    """
+    # Now we can collect the urls of each sitter on this page (first page for now).
+
+
     # Set up crawler config--controls how each crawl runs.
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
-        stream=False
-    )
-    dispatcher = MemoryAdaptiveDispatcher(
-        memory_threshold_percent=70.0,      # Don't exceed 70% memory usage
-        check_interval=1.0,                 # Check memory every second
-        max_session_permit=max_concurrent   # Max parallel browser sessions
+        extraction_strategy=JsonCssExtractionStrategy(results_card_schema),
+        js_code=[js_hit_search, js_close_modal],
     )
 
-    # Track visited URLs to prevent revisiting and infinite loops (ignoring fragments)
-    visited = set()
-    def normalize_url(url):
-        # Remove fragment (part after #)
-        return urldefrag(url)[0]
-    current_urls = set([normalize_url(u) for u in start_urls])
-
+    # AsyncWebCrawler, an asynchronous web crawler.
     async with AsyncWebCrawler(config=browser_config) as crawler:
-        for depth in range(max_depth):
-            print(f"\n=== Crawling Depth {depth+1} ===")
-            # Only crawl URLs we haven't seen yet (ignoring fragments)
-            urls_to_crawl = [normalize_url(url) for url in current_urls if normalize_url(url) not in visited]
+        result = await crawler.arun(
+            url="https://www.rover.com/", config=crawler_config
+        )
+        # print("Crawl finished. Browser will stay open until you press Enter...")
+        # input("Press Enter to close the browser")
 
-            if not urls_to_crawl:
-                break
+        sitters = json.loads(result.extracted_content)
+        print("✅ Crawl finished, checking extracted content")
+        print("Raw extracted content:", result.extracted_content[:500], "...")  # first 500 chars
+        print(f"Successfully extracted {len(sitters)} sitters of first search results page.")
+        # print(json.dumps(sitters[0], indent=2))
 
-            # Batch-crawl all URLs at this depth in parallel
-            results = await crawler.arun_many(
-                urls=urls_to_crawl,
-                config=crawler_config,
-                dispatcher=dispatcher
-            )
-
-            next_level_urls = set()
-
-            for result in results:
-                norm_url = normalize_url(result.url)
-                visited.add(norm_url)  # Mark as visited (no fragment)
-                if result.success:
-                    print(f"[OK] {result.url} | Markdown: {len(result.markdown) if result.markdown else 0} chars")
-                    # Collect all new internal links for the next depth
-                    for link in result.links.get("internal", []):
-                        next_url = normalize_url(link["href"])
-                        if next_url not in visited:
-                            next_level_urls.add(next_url)
-                else:
-                    print(f"[ERROR] {result.url}: {result.error_message}")
-                    
-            # Move to the next set of URLs for the next recursion depth
-            current_urls = next_level_urls
+async def main():
+    await extract_structured_data_using_css_extractor()
 
 if __name__ == "__main__":
-    asyncio.run(crawl_recursive_batch(["https://ai.pydantic.dev/"], max_depth=3, max_concurrent=10))
+    asyncio.run(main())
