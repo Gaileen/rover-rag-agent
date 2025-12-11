@@ -32,17 +32,14 @@ async def extract_structured_data_using_css_extractor():
     )
 
     ### test js function vars
+
     js_hit_search = """
     (() => {
         const search_btn = document.querySelector('button[data-testid="search-box-submit"]');
-        if (search_btn) {
-            search_btn.click();
-            console.log("SEARCH button clicked successfully");
-        } else {
-            console.warn("SEARCH button not found");
-        }
+        search_btn.click();
     })();
     """
+    
     js_close_modal = """
     (() => {
         const modal_btn = document.querySelector('button[aria-label="Dismiss modal"]');
@@ -72,7 +69,11 @@ async def extract_structured_data_using_css_extractor():
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=JsonCssExtractionStrategy(results_card_schema),
-        js_code=[js_hit_search, js_close_modal],
+        js_code=[js_hit_search],
+        capture_console_messages=True,
+        log_console=True,
+        capture_network_requests=True,
+        wait_until="networkidle"
     )
 
     # AsyncWebCrawler, an asynchronous web crawler.
@@ -80,14 +81,11 @@ async def extract_structured_data_using_css_extractor():
         result = await crawler.arun(
             url="https://www.rover.com/", config=crawler_config
         )
-        # print("Crawl finished. Browser will stay open until you press Enter...")
-        # input("Press Enter to close the browser")
 
         sitters = json.loads(result.extracted_content)
         print("✅ Crawl finished, checking extracted content")
         print("Raw extracted content:", result.extracted_content[:500], "...")  # first 500 chars
         print(f"Successfully extracted {len(sitters)} sitters of first search results page.")
-        # print(json.dumps(sitters[0], indent=2))
 
 async def main():
     await extract_structured_data_using_css_extractor()
