@@ -17,8 +17,7 @@ async def extract_structured_data_using_css_extractor():
             },
             {
                 "name": "sitter_url",
-                # "selector": "a .SearchResultCard__MemberProfileAnchor-sc-doe1cb-0",
-                "selector": "> a",
+                "selector": "a",
                 "type": "attribute",
                 "attribute": "href"
             },
@@ -69,11 +68,11 @@ async def extract_structured_data_using_css_extractor():
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=JsonCssExtractionStrategy(results_card_schema),
-        js_code=[js_hit_search],
+        js_code=[js_hit_search], # JS injection happens before Crawl4AI waits for network idle, but after page started loading
         capture_console_messages=True,
         log_console=True,
         capture_network_requests=True,
-        wait_until="networkidle"
+        wait_until="networkidle" # ensure a webpage is fully loaded before crawler proceeds extracting (does not affect JS injection)
     )
 
     # AsyncWebCrawler, an asynchronous web crawler.
@@ -84,7 +83,7 @@ async def extract_structured_data_using_css_extractor():
 
         sitters = json.loads(result.extracted_content)
         print("✅ Crawl finished, checking extracted content")
-        print("Raw extracted content:", result.extracted_content[:500], "...")  # first 500 chars
+        print("Raw extracted content:", result.extracted_content) 
         print(f"Successfully extracted {len(sitters)} sitters of first search results page.")
 
 async def main():
