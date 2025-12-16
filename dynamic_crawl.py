@@ -28,7 +28,8 @@ async def extract_structured_data_using_css_extractor():
     browser_config = BrowserConfig(
         headless=False,             # show UI
         java_script_enabled=True,   # enable js to execute on the page (js-rendering, etc.)
-        verbose=True
+        verbose=True,
+        enable_stealth=True
     )
 
     ### test js function vars: to move this into a separate js script for code cleanup
@@ -57,32 +58,72 @@ async def extract_structured_data_using_css_extractor():
     # Set the address value into the address input box.
     # Create a new KeyboardEvent for the 'Enter' key.
     # Dispatch the event on the target element.
-    js_input_search = """
-    (() => {
-        const addr_box = document.querySelector('input[data-testid="location-input"]');
-        const addr_in = 'Milford, CT, USA';
-        addr_box.focus();
+
+    js_input_text_filter = """
+    function js_input_text_filter(container, text_in) {
+        container.focus();
         
         const setter = Object.getOwnPropertyDescriptor(
             HTMLInputElement.prototype,
             'value'
         ).set;
-        setter.call(addr_box, addr_in);
+        setter.call(container, text_in);
 
-        addr_box.dispatchEvent(new Event('input', { bubbles: true }));
+        container.dispatchEvent(new Event('input', { bubbles: true }));
         
-        addr_box.dispatchEvent(new KeyboardEvent('keydown', {
+        container.dispatchEvent(new KeyboardEvent('keydown', {
             key: 'Enter',
             code: 'Enter',
             bubbles: true
         }));
-        addr_box.dispatchEvent(new KeyboardEvent('keyup', {
+        container.dispatchEvent(new KeyboardEvent('keyup', {
             key: 'Enter',
             code: 'Enter',
             bubbles: true
         }));
 
-        addr_box.blur();
+        container.blur();
+    }
+    """
+
+    js_input_address = f"""
+    {js_input_text_filter}
+    (() => {{
+        const addr_box = document.querySelector('input[data-testid="location-input"]');
+        const addr_in = 'Milford, CT, USA';
+        js_input_text_filter(addr_box, addr_in);
+    }})();
+    """
+
+    # search results list names not always accurate for? 
+    # const dropoff_in = '12/16/2025';
+    # const pickup_in = '12/18/2025';
+    js_input_dates = f"""
+    {js_input_text_filter}
+    (() => {{
+        const dropoff_box = document.querySelector('input[placeholder="Drop off"]');
+        const pickup_box = document.querySelector('input[placeholder="Pick up"]');
+        const dropoff_in = '12/26/2025';
+        const pickup_in = '12/28/2025';
+        js_input_text_filter(dropoff_box, dropoff_in);
+        js_input_text_filter(pickup_box, pickup_in);
+    }})();
+    """
+
+    # for booking type, we'll need user to select from options we define in chat
+    js_input_booking_type = """
+    (() => {
+        const booking_type = 'House Sitting';
+        const checkbox = document.querySelector(`input[aria-label="${booking_type}"]`);
+        checkbox.click();
+    })();
+    """
+
+    js_input_dog_size = """
+    (() => {
+        const size = '';
+        const checkbox = document.querySelector(`input[aria-label="${size}"]`);
+        checkbox.click();
     })();
     """
 
@@ -97,7 +138,9 @@ async def extract_structured_data_using_css_extractor():
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=JsonCssExtractionStrategy(results_card_schema),
-        js_code=[js_input_search,
+        js_code=[js_input_booking_type,
+                 js_input_address,
+                 js_input_dates,
                  js_hit_search], # JS injection happens before Crawl4AI waits for network idle, but after page started loading
         capture_console_messages=True,
         log_console=True,
@@ -123,8 +166,8 @@ async def extract_structured_data_using_css_extractor():
             print(f"Crawl failed: {result.error_message}")
 
         ##################
-        ## OK SO NEXT STEPS NOW ARE TO FIGURE OUT JS TO SELECT FILTERS (start w/ location, then check boxes).
-        ## then if time, figure out how to use user input to select filters.
+        ## OK SO NEXT STEPS NOW ARE TO FIGURE OUT JS to use user input as address.
+        ## and JS TO SELECT more FILTERS (now dates, then check boxes).
         ###################        
 
 async def main():
