@@ -1,7 +1,12 @@
 import asyncio
 import json
+from pathlib import Path
 from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
 from crawl4ai import JsonCssExtractionStrategy
+
+js_init_search_filter = (Path(__file__).parent / "js-scripts/input_init_search_filters.js").read_text()
+js_click_search = (Path(__file__).parent / "js-scripts/click_search.js").read_text()
+# js_other_filter = (Path(__file__).parent / "js-scripts/input_other_filters.js").read_text()
 
 async def extract_structured_data_using_css_extractor():
     
@@ -31,28 +36,6 @@ async def extract_structured_data_using_css_extractor():
         verbose=True,
         enable_stealth=True
     )
-
-    ### test js function vars: to move this into a separate js script for code cleanup
-
-    js_hit_search = """
-    (() => {
-        const search_btn = document.querySelector('button[data-testid="search-box-submit"]');
-        search_btn.click();
-    })();
-    """
-    
-    js_close_modal = """
-    (() => {
-        const modal_btn = document.querySelector('button[aria-label="Dismiss modal"]');
-        if (modal_btn) {
-            modal_btn.click();
-            console.log("MODAL close button clicked successfully");
-        } else {
-            console.warn("MODAL close button not found");
-        }
-    })();
-    """
-    ### test js function vars end
 
     # 1) js function that enters user input () into the search box
     # Set the address value into the address input box.
@@ -86,15 +69,6 @@ async def extract_structured_data_using_css_extractor():
     }
     """
 
-    js_input_address = f"""
-    {js_input_text_filter}
-    (() => {{
-        const addr_box = document.querySelector('input[data-testid="location-input"]');
-        const addr_in = 'Milford, CT, USA';
-        js_input_text_filter(addr_box, addr_in);
-    }})();
-    """
-
     # search results list names not always accurate for? 
     # const dropoff_in = '12/16/2025';
     # const pickup_in = '12/18/2025';
@@ -110,38 +84,23 @@ async def extract_structured_data_using_css_extractor():
     }})();
     """
 
-    # for booking type, we'll need user to select from options we define in chat
-    js_input_booking_type = """
-    (() => {
-        const booking_type = 'House Sitting';
-        const checkbox = document.querySelector(`input[aria-label="${booking_type}"]`);
-        checkbox.click();
-    })();
-    """
-
+    # search results list names not always accurate for? Giant dog
     js_input_dog_size = """
     (() => {
-        const size = '';
+        const size = 'Giant (101+ to  lbs)';
         const checkbox = document.querySelector(`input[aria-label="${size}"]`);
         checkbox.click();
     })();
     """
 
-    # 2) js function that inputs # of dogs/puppies/cats, -> hit 'Next' btn, ->
-    # hit 'Search Now' btn; all in the modal pop-up that occurs on browser.
-    js_modal = """
-    """
-    # Now we can collect the urls of each sitter on this page (first page for now).
-
-
     # Set up crawler config--controls how each crawl runs.
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=JsonCssExtractionStrategy(results_card_schema),
-        js_code=[js_input_booking_type,
-                 js_input_address,
-                 js_input_dates,
-                 js_hit_search], # JS injection happens before Crawl4AI waits for network idle, but after page started loading
+        js_code=[js_init_search_filter,
+                #  js_input_dates,
+                js_click_search
+                 ], # JS injection happens before Crawl4AI waits for network idle, but after page started loading
         capture_console_messages=True,
         log_console=True,
         capture_network_requests=True,
@@ -166,8 +125,8 @@ async def extract_structured_data_using_css_extractor():
             print(f"Crawl failed: {result.error_message}")
 
         ##################
-        ## OK SO NEXT STEPS NOW ARE TO FIGURE OUT JS to use user input as address.
-        ## and JS TO SELECT more FILTERS (now dates, then check boxes).
+        ## OK SO NEXT STEPS NOW ARE TO 
+        ## Figure out why resulting sitter names from terminal not always == what I see in actual browser.
         ###################        
 
 async def main():
