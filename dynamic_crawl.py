@@ -1,14 +1,16 @@
+import argparse
 import asyncio
 import json
 from pathlib import Path
-from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode
+from typing import Any, Dict, List
+from crawl4ai import AsyncWebCrawler, BrowserConfig, CrawlerRunConfig, CacheMode, MemoryAdaptiveDispatcher
 from crawl4ai import JsonCssExtractionStrategy
 
 js_init_search_filter = (Path(__file__).parent / "js-scripts/input_init_search_filters.js").read_text()
 js_click_search = (Path(__file__).parent / "js-scripts/click_search.js").read_text()
 # js_other_filter = (Path(__file__).parent / "js-scripts/input_other_filters.js").read_text()
 
-async def extract_structured_data_using_css_extractor():
+async def extract_urls():
     
     # define the CSS schema needed for crawler to get the sitter URLs to collect
     results_card_schema = {
@@ -37,67 +39,13 @@ async def extract_structured_data_using_css_extractor():
         enable_stealth=True
     )
 
-    # 1) js function that enters user input () into the search box
-    # Set the address value into the address input box.
-    # Create a new KeyboardEvent for the 'Enter' key.
-    # Dispatch the event on the target element.
-
-    js_input_text_filter = """
-    function js_input_text_filter(container, text_in) {
-        container.focus();
-        
-        const setter = Object.getOwnPropertyDescriptor(
-            HTMLInputElement.prototype,
-            'value'
-        ).set;
-        setter.call(container, text_in);
-
-        container.dispatchEvent(new Event('input', { bubbles: true }));
-        
-        container.dispatchEvent(new KeyboardEvent('keydown', {
-            key: 'Enter',
-            code: 'Enter',
-            bubbles: true
-        }));
-        container.dispatchEvent(new KeyboardEvent('keyup', {
-            key: 'Enter',
-            code: 'Enter',
-            bubbles: true
-        }));
-
-        container.blur();
-    }
-    """
-
-    # search results list names not always accurate for? 
-    # const dropoff_in = '12/16/2025';
-    # const pickup_in = '12/18/2025';
-    js_input_dates = f"""
-    {js_input_text_filter}
-    (() => {{
-        const dropoff_box = document.querySelector('input[placeholder="Drop off"]');
-        const pickup_box = document.querySelector('input[placeholder="Pick up"]');
-        const dropoff_in = '12/26/2025';
-        const pickup_in = '12/28/2025';
-        js_input_text_filter(dropoff_box, dropoff_in);
-        js_input_text_filter(pickup_box, pickup_in);
-    }})();
-    """
-
-    # search results list names not always accurate for? Giant dog
-    js_input_dog_size = """
-    (() => {
-        const size = 'Giant (101+ to  lbs)';
-        const checkbox = document.querySelector(`input[aria-label="${size}"]`);
-        checkbox.click();
-    })();
-    """
-
     # Set up crawler config--controls how each crawl runs.
     crawler_config = CrawlerRunConfig(
         cache_mode=CacheMode.BYPASS,
         extraction_strategy=JsonCssExtractionStrategy(results_card_schema),
-        js_code=[js_init_search_filter,
+        js_code=[
+            #TODO Test crawl scraping w/ other filters applied (other than booking type + address)  
+                js_init_search_filter,
                 #  js_input_dates,
                 js_click_search
                  ], # JS injection happens before Crawl4AI waits for network idle, but after page started loading
@@ -118,19 +66,40 @@ async def extract_structured_data_using_css_extractor():
         if result.success:
             sitters = json.loads(result.extracted_content)
             print("✅ Crawl finished, checking extracted content")
-            print("Raw extracted content:", result.extracted_content) 
             print(f"Successfully extracted {len(sitters)} sitters of first search results page.")
+            return [sitter.get("sitter_url") for sitter in sitters if sitter.get("sitter_url")]
 
         else:
             print(f"Crawl failed: {result.error_message}")
 
-        ##################
-        ## OK SO NEXT STEPS NOW ARE TO 
-        ## Figure out why resulting sitter names from terminal not always == what I see in actual browser.
-        ###################        
+
+async def batch_crawl(urls: List[str], max_concurrent: int = 10) -> List[Dict[str,Any]]:
+    """
+    Process multiple URLs with intelligent rate limiting and resource monitoring using arun_many().
+    """
+    browser_config = BrowserConfig(headless=True, verbose=False)
+    crawl_config = CrawlerRunConfig(cache_mode=CacheMode.BYPASS, stream=False)
+    dispatcher = MemoryAdaptiveDispatcher(
+        memory_threshold_percent=70.0,
+        check_interval=1.0,
+        max_session_permit=max_concurrent
+    )
+
+    async with AsyncWebCrawler(config=browser_config) as crawler:
+        results = await crawler.arun_many(urls=urls, config=crawl_config, dispatcher=dispatcher)
+        return [{'url': r.url, 'markdown': r.markdown} for r in results if r.success and r.markdown]
+
 
 async def main():
-    await extract_structured_data_using_css_extractor()
+    # Get URLs from first page of search results
+    sitter_urls = await extract_urls()
+    print("URLs:", sitter_urls) 
+
+    # Get crawl results from URLs collected
+    crawl_results = asyncio.run(batch_crawl(sitter_urls, max_concurrent=args.max_concurrent))
+
+    # Chunk and collect metadata
+    #TODO. need to understand batch_crawl first
 
 if __name__ == "__main__":
     asyncio.run(main())

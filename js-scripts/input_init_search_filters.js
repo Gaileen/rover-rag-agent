@@ -1,6 +1,10 @@
 // Inputs the search filters shown on Home page.
  
 (() => {
+    // 1) js function that enters user input () into the search box
+    // Set the address value into the address input box.
+    // Create a new KeyboardEvent for the 'Enter' key.
+    // Dispatch the event on the target element.
     function input_text_filter(container, text_in) {
         container.focus();
         
@@ -34,7 +38,8 @@
     
     // for booking type, we'll need user to select from options we define in chat
     function input_booking_type() {
-        const booking_type = 'House Sitting';
+        // const booking_type = 'House Sitting';
+        const booking_type = 'Boarding';
         const checkbox = document.querySelector(`input[aria-label="${booking_type}"]`);
         checkbox.click();
     }
